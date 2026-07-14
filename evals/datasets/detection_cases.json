@@ -1,0 +1,155 @@
+[
+  {
+    "record": {
+      "oligo_id": "OLG-2024-0001",
+      "batch_id": "B-2024-0419-003",
+      "notebook": {
+        "source": {
+          "document_id": "s3://kb/nb-2024-001.txt",
+          "document_type": "notebook",
+          "source_id": "NB-2024-001",
+          "author": "a.scientist",
+          "date": "2024-04-19"
+        },
+        "qc_status": "PASS",
+        "notes": "Synthesis clean, QC pass, no anomalies observed.",
+        "hplc_purity_pct": 92.0,
+        "od260_yield_pct": 78.0
+      },
+      "fastq": {
+        "source": {
+          "document_id": "s3://kb/run-2024-0419.txt",
+          "document_type": "fastq",
+          "source_id": "RUN-2024-0419"
+        },
+        "on_target_pct": 70.0,
+        "read_depth": 320,
+        "off_target_loci": 2,
+        "sequencing_date": "2024-04-20"
+      },
+      "days_in_queue": 3,
+      "source_texts": {
+        "NB-2024-001": "Notebook NB-2024-001: Synthesis clean, QC pass, no anomalies observed. Yield 78%."
+      }
+    },
+    "expected_conflict_codes": ["notebook_fastq_mismatch"],
+    "expected_needs_review": false
+  },
+  {
+    "record": {
+      "oligo_id": "OLG-2024-0002",
+      "batch_id": "B-2024-0419-003",
+      "notebook": {
+        "source": {
+          "document_id": "s3://kb/nb-2024-002.txt",
+          "document_type": "notebook",
+          "source_id": "NB-2024-002"
+        },
+        "qc_status": "FAIL",
+        "notes": "Coupling failure observed at cycle 12.",
+        "od260_yield_pct": 65.0
+      },
+      "fastq": {
+        "source": {
+          "document_id": "s3://kb/run-2024-0421.txt",
+          "document_type": "fastq",
+          "source_id": "RUN-2024-0421"
+        },
+        "on_target_pct": 95.0,
+        "read_depth": 300,
+        "off_target_loci": 1
+      },
+      "lims": {
+        "source": {
+          "document_id": "lims://OLG-2024-0002",
+          "document_type": "lims",
+          "source_id": "LIMS#OLG-2024-0002"
+        },
+        "state": "released",
+        "batch_id": "B-2024-0419-003"
+      },
+      "days_in_queue": 5,
+      "source_texts": {
+        "NB-2024-002": "Notebook NB-2024-002: Coupling failure observed at cycle 12. QC fail."
+      }
+    },
+    "expected_conflict_codes": ["fastq_notebook_mismatch", "lims_notebook_discrepancy"],
+    "expected_needs_review": false
+  },
+  {
+    "record": {
+      "oligo_id": "OLG-2024-0003",
+      "batch_id": "B-2024-0419-003",
+      "notebook": {
+        "source": {
+          "document_id": "s3://kb/nb-2024-003.txt",
+          "document_type": "notebook",
+          "source_id": "NB-2024-003"
+        },
+        "qc_status": "PASS",
+        "notes": "This quote is fabricated and not in the source.",
+        "od260_yield_pct": 80.0
+      },
+      "fastq": {
+        "source": {
+          "document_id": "s3://kb/run-2024-0422.txt",
+          "document_type": "fastq",
+          "source_id": "RUN-2024-0422"
+        },
+        "on_target_pct": 60.0,
+        "read_depth": 300,
+        "off_target_loci": 1
+      },
+      "days_in_queue": 4,
+      "source_texts": {
+        "NB-2024-003": "Notebook NB-2024-003: sample processed normally."
+      }
+    },
+    "expected_conflict_codes": ["notebook_fastq_mismatch"],
+    "expected_needs_review": true
+  },
+  {
+    "record": {
+      "oligo_id": "OLG-2024-0004",
+      "batch_id": "B-2024-0301-001",
+      "notebook": {
+        "source": {
+          "document_id": "s3://kb/nb-2024-004.txt",
+          "document_type": "notebook",
+          "source_id": "NB-2024-004"
+        },
+        "qc_status": "PASS",
+        "notes": "Low yield noted; proceed with caution.",
+        "od260_yield_pct": 40.0
+      },
+      "fastq": {
+        "source": {
+          "document_id": "s3://kb/run-2024-0305.txt",
+          "document_type": "fastq",
+          "source_id": "RUN-2024-0305"
+        },
+        "on_target_pct": 90.0,
+        "read_depth": 150,
+        "off_target_loci": 8
+      },
+      "lims": {
+        "source": {
+          "document_id": "lims://OLG-2024-0004",
+          "document_type": "lims",
+          "source_id": "LIMS#OLG-2024-0004"
+        },
+        "state": "qc_pass"
+      },
+      "days_in_queue": 20,
+      "source_texts": {
+        "NB-2024-004": "Notebook NB-2024-004: Low yield noted; proceed with caution."
+      }
+    },
+    "expected_conflict_codes": [
+      "off_target_excess",
+      "sequencing_insufficient",
+      "yield_below_threshold"
+    ],
+    "expected_needs_review": false
+  }
+]

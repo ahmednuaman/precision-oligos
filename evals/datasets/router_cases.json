@@ -1,0 +1,22 @@
+[
+  {
+    "query": "Check QC conflicts for batch B-2024-0419-003 and draft a re-synthesis order.",
+    "expected_intent": "qc_conflict_check"
+  },
+  {
+    "query": "Give me a health summary and pass-rate trend for batch B-2024-0419-003.",
+    "expected_intent": "batch_health"
+  },
+  {
+    "query": "Which oligos in batch B-2024-0301-001 are missing metadata or unreported outcomes?",
+    "expected_intent": "data_quality"
+  },
+  {
+    "query": "Investigate the likely root cause of the failure for oligo OLG-2024-0002.",
+    "expected_intent": "root_cause"
+  },
+  {
+    "query": "Which oligos need resequencing due to low coverage?",
+    "expected_intent": "resequencing"
+  }
+]

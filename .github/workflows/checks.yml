@@ -1,0 +1,101 @@
+name: checks
+
+# PRs run checks only - never deploy. Deploys happen on push (see deploy.yml).
+on:
+  pull_request:
+    branches:
+      - development
+      - "release/**"
+      - production
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install dependencies
+        run: uv pip install --system -e ".[dev,tracing]"
+      - name: Lint (ruff)
+        run: ruff check src tests evals
+      - name: Unit tests
+        run: pytest -q
+      - name: Eval harness (deterministic)
+        run: python -m evals.run
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Type-check
+        run: npm run lint
+      - name: Build
+        run: npm run build
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t oligos-agents:pr .
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: oligos-agents:pr
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.8
+      - name: Format check
+        run: terraform -chdir=terraform fmt -check -recursive
+      - name: Validate
+        run: |
+          terraform -chdir=terraform init -backend=false
+          terraform -chdir=terraform validate
+      # Optional read-only plan when a PR plan role is configured as a repo variable.
+      - name: Configure AWS (read-only)
+        if: vars.AWS_PR_PLAN_ROLE_ARN != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PR_PLAN_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+      - name: Terraform plan (development)
+        if: vars.AWS_PR_PLAN_ROLE_ARN != ''
+        env:
+          TF_VAR_envid: ${{ vars.DEV_ENVID }}
+          TF_VAR_environment: dev
+          TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+          TF_VAR_container_image: "pr-plan-placeholder"
+          TF_VAR_cognito_domain_prefix: ${{ vars.DEV_ENVID }}
+          TF_VAR_knowledge_base_id: ${{ vars.DEV_KNOWLEDGE_BASE_ID }}
+          TF_VAR_entra_saml_metadata_url: ${{ vars.DEV_ENTRA_SAML_METADATA_URL }}
+        run: |
+          terraform -chdir=terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ vars.DEV_ENVID }}/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+          terraform -chdir=terraform plan -lock=false -input=false

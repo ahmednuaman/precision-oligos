@@ -1,0 +1,5 @@
+# Copy to development.s3.tfbackend and fill in your bootstrap state bucket.
+# Usage: terraform init -backend-config=backend-config/development.s3.tfbackend
+bucket = "acme-oligos-tfstate-eu-west-1"
+key    = "acme-oligos-dev/terraform.tfstate"
+region = "eu-west-1"

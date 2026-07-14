@@ -1,0 +1,6 @@
+# Applied once with elevated credentials to create remote state + CI roles.
+aws_region        = "eu-west-1"
+github_org        = "your-org"
+github_repo       = "oligos-agents"
+state_bucket_name = "acme-oligos-tfstate-eu-west-1"
+name_prefix       = "acme-oligos"

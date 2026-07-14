@@ -1,0 +1,41 @@
+# Copy to a per-environment tfvars file and pass with -var-file. Example:
+#   terraform apply -var-file=environments/development.tfvars
+
+envid       = "acme-oligos-dev"
+environment = "dev"
+aws_region  = "eu-west-1"
+repository  = "oligos-agents"
+
+# Container image built and pushed by CI (ECR URI:tag).
+container_image = "111122223333.dkr.ecr.eu-west-1.amazonaws.com/oligos-agents-acme-oligos-dev:latest"
+
+# Cost controls (non-production).
+use_spot          = true
+api_desired_count = 2
+
+# Bedrock (region-pinned inference profiles).
+router_model     = "bedrock:eu.anthropic.claude-3-5-haiku-20241022-v1:0"
+extraction_model = "bedrock:eu.anthropic.claude-3-5-haiku-20241022-v1:0"
+drafting_model   = "bedrock:eu.anthropic.claude-sonnet-5"
+
+# Existing knowledge base (consumed, not provisioned).
+knowledge_base_id     = "ABCDEFGHIJ"
+knowledge_base_region = "eu-west-1"
+# kb_assume_role_arn  = "arn:aws:iam::444455556666:role/KbReadIamRole-acme-oligos-dev"
+
+# LIMS (optional).
+# lims_base_url = "https://lims.internal.example/api"
+
+# Authentication (Cognito + Entra SAML).
+cognito_domain_prefix   = "acme-oligos-dev"
+saml_provider_name      = "EntraSAML"
+entra_saml_metadata_url = "https://login.microsoftonline.com/<tenant>/federationmetadata/2007-06/federationmetadata.xml?appid=<appid>"
+
+# Edge / TLS (recommended for real environments; leave blank to use the
+# CloudFront default domain and set public_base_url_override after first apply).
+# acm_certificate_arn = "arn:aws:acm:us-east-1:111122223333:certificate/xxxx"
+# cloudfront_aliases  = ["oligos-dev.example.com"]
+# public_base_url_override = "https://dxxxxxxxxxxxxx.cloudfront.net"
+
+audit_retention_years = 7
+log_retention_days    = 90

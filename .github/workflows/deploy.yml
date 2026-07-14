@@ -1,0 +1,146 @@
+name: deploy
+
+# Branch -> environment: development -> development, release/vX.X.X -> staging,
+# production -> production. Deploys only ever run on push to these branches.
+on:
+  push:
+    branches:
+      - development
+      - "release/**"
+      - production
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.env.outputs.environment }}
+      version: ${{ steps.env.outputs.version }}
+    steps:
+      - id: env
+        run: |
+          ref="${GITHUB_REF#refs/heads/}"
+          if [ "$ref" = "development" ]; then
+            echo "environment=development" >> "$GITHUB_OUTPUT"
+            echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"
+          elif [ "$ref" = "production" ]; then
+            echo "environment=production" >> "$GITHUB_OUTPUT"
+            echo "version=prod" >> "$GITHUB_OUTPUT"
+          elif [[ "$ref" == release/* ]]; then
+            echo "environment=staging" >> "$GITHUB_OUTPUT"
+            echo "version=${ref#release/}" >> "$GITHUB_OUTPUT"
+          else
+            echo "Unsupported branch: $ref" >&2
+            exit 1
+          fi
+
+  deploy:
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: ${{ needs.resolve.outputs.environment }}
+    concurrency:
+      group: deploy-${{ needs.resolve.outputs.environment }}
+      cancel-in-progress: false
+    env:
+      ENVID: ${{ vars.ENVID }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      IMAGE_TAG: ${{ needs.resolve.outputs.version }}-${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push image
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+          REPO: oligos-agents-${{ vars.ENVID }}
+        run: |
+          IMAGE="$REGISTRY/$REPO:$IMAGE_TAG"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "CONTAINER_IMAGE=$IMAGE" >> "$GITHUB_ENV"
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.8
+
+      - name: Terraform init
+        run: |
+          terraform -chdir=terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=${{ vars.ENVID }}/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+
+      - name: Terraform apply
+        env:
+          TF_VAR_envid: ${{ vars.ENVID }}
+          TF_VAR_environment: ${{ vars.ENV_SEGMENT }}
+          TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+          TF_VAR_container_image: ${{ env.CONTAINER_IMAGE }}
+          TF_VAR_use_spot: ${{ vars.USE_SPOT }}
+          TF_VAR_cognito_domain_prefix: ${{ vars.COGNITO_DOMAIN_PREFIX }}
+          TF_VAR_saml_provider_name: ${{ vars.SAML_PROVIDER_NAME }}
+          TF_VAR_entra_saml_metadata_url: ${{ vars.ENTRA_SAML_METADATA_URL }}
+          TF_VAR_knowledge_base_id: ${{ vars.KNOWLEDGE_BASE_ID }}
+          TF_VAR_knowledge_base_region: ${{ vars.AWS_REGION }}
+          TF_VAR_kb_assume_role_arn: ${{ vars.KB_ASSUME_ROLE_ARN }}
+          TF_VAR_lims_base_url: ${{ vars.LIMS_BASE_URL }}
+          TF_VAR_acm_certificate_arn: ${{ vars.ACM_CERTIFICATE_ARN }}
+          TF_VAR_public_base_url_override: ${{ vars.PUBLIC_BASE_URL }}
+        run: terraform -chdir=terraform apply -auto-approve -input=false
+
+      - name: Read Terraform outputs
+        id: tf
+        run: |
+          echo "spa_bucket=$(terraform -chdir=terraform output -raw spa_bucket)" >> "$GITHUB_OUTPUT"
+          echo "distribution_id=$(terraform -chdir=terraform output -raw cloudfront_distribution_id)" >> "$GITHUB_OUTPUT"
+          echo "public_url=$(terraform -chdir=terraform output -raw public_url)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build SPA
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+          # Runtime config: same-origin API, env label for the header badge.
+          printf '{"apiBase":"","envLabel":"%s"}' "${{ needs.resolve.outputs.environment }}" \
+            > dist/config.json
+
+      - name: Sync SPA to S3
+        run: |
+          aws s3 sync frontend/dist "s3://${{ steps.tf.outputs.spa_bucket }}" --delete
+          # Never cache the runtime config or the HTML shell.
+          aws s3 cp frontend/dist/config.json "s3://${{ steps.tf.outputs.spa_bucket }}/config.json" \
+            --cache-control "no-store"
+
+      - name: Invalidate CloudFront
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "${{ steps.tf.outputs.distribution_id }}" \
+            --paths "/*"
+
+      - name: Smoke test
+        run: |
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.tf.outputs.public_url }}/healthz" || true)
+            if [ "$code" = "200" ]; then echo "healthz OK"; exit 0; fi
+            echo "attempt $i: $code"; sleep 15
+          done
+          echo "Smoke test failed" >&2
+          exit 1
